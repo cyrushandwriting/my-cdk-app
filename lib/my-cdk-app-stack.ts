@@ -7,7 +7,7 @@ export class VpcInfrastructureStack extends cdk.Stack {
     super(scope, id, props);
 
     // Create VPC
-    const vpc = new ec2.Vpc(this, 'TestVPCFromCDK', {
+    const vpc = new ec2.Vpc(this, 'MyVPC', {
       cidr: '10.0.0.0/24',
       maxAzs: 1, // Using single AZ for simplicity
       subnetConfiguration: [], // We'll create subnets manually
@@ -17,7 +17,7 @@ export class VpcInfrastructureStack extends cdk.Stack {
 
     // Create Internet Gateway
     const igw = new ec2.CfnInternetGateway(this, 'InternetGateway', {
-      tags: [{ key: 'Name', value: 'TestVPCFromCDK-IGW' }],
+      tags: [{ key: 'Name', value: 'MyVPC-IGW' }],
     });
 
     // Attach Internet Gateway to VPC
@@ -212,47 +212,42 @@ export class VpcInfrastructureStack extends cdk.Stack {
       'Allow all traffic from VPC'
     );
 
-    // Get latest Amazon Linux 2 AMI
-    const amznLinuxAmi = ec2.MachineImage.latestAmazonLinux({
-      generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2,
-    });
+    // Remove the amznLinuxAmi variable since we're using CfnInstance now
 
-    // Create Public EC2 Instance
-    const publicInstance = new ec2.Instance(this, 'PublicInstance', {
-      vpc: vpc,
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T2, ec2.InstanceSize.MICRO),
-      machineImage: amznLinuxAmi,
-      securityGroup: publicSecurityGroup,
-      vpcSubnets: {
-        subnets: [ec2.Subnet.fromSubnetId(this, 'PublicSubnetRef', publicSubnet.ref)],
-      },
+    // Create Public EC2 Instance using CfnInstance for better control
+    const publicInstance = new ec2.CfnInstance(this, 'PublicInstance', {
+      instanceType: 't2.micro',
+      imageId: ec2.MachineImage.latestAmazonLinux({
+        generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2,
+      }).getImage(this).imageId,
+      subnetId: publicSubnet.ref,
+      securityGroupIds: [publicSecurityGroup.securityGroupId],
       keyName: 'KPLegend1', // Replace with your actual key pair name
-      userData: ec2.UserData.custom(`#!/bin/bash
+      userData: cdk.Fn.base64(`#!/bin/bash
 yum update -y
 yum install -y httpd
 systemctl start httpd
 systemctl enable httpd
 echo "<h1>Hello from Public Instance</h1>" > /var/www/html/index.html`),
+      tags: [{ key: 'Name', value: 'Public Web Server' }],
     });
 
-    // Create Private EC2 Instance
-    const privateInstance = new ec2.Instance(this, 'PrivateInstance', {
-      vpc: vpc,
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T2, ec2.InstanceSize.MICRO),
-      machineImage: amznLinuxAmi,
-      securityGroup: privateSecurityGroup,
-      vpcSubnets: {
-        subnets: [ec2.Subnet.fromSubnetId(this, 'PrivateSubnetRef', privateSubnet.ref)],
-      },
+    // Create Private EC2 Instance using CfnInstance for better control
+    const privateInstance = new ec2.CfnInstance(this, 'PrivateInstance', {
+      instanceType: 't2.micro',
+      imageId: ec2.MachineImage.latestAmazonLinux({
+        generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2,
+      }).getImage(this).imageId,
+      subnetId: privateSubnet.ref,
+      securityGroupIds: [privateSecurityGroup.securityGroupId],
       keyName: 'KPLegend1', // Replace with your actual key pair name
-      userData: ec2.UserData.custom(`#!/bin/bash
+      userData: cdk.Fn.base64(`#!/bin/bash
 yum update -y
 echo "Private instance setup complete" > /home/ec2-user/setup.log`),
+      tags: [{ key: 'Name', value: 'Private Server' }],
     });
 
-    // Add tags to instances
-    cdk.Tags.of(publicInstance).add('Name', 'Public Web Server');
-    cdk.Tags.of(privateInstance).add('Name', 'Private Server');
+    // Add tags to instances (already included in CfnInstance definition above)
 
     // Outputs
     new cdk.CfnOutput(this, 'VPCId', {
@@ -271,17 +266,17 @@ echo "Private instance setup complete" > /home/ec2-user/setup.log`),
     });
 
     new cdk.CfnOutput(this, 'PublicInstanceId', {
-      value: publicInstance.instanceId,
+      value: publicInstance.ref,
       description: 'Public EC2 Instance ID',
     });
 
     new cdk.CfnOutput(this, 'PrivateInstanceId', {
-      value: privateInstance.instanceId,
+      value: privateInstance.ref,
       description: 'Private EC2 Instance ID',
     });
 
     new cdk.CfnOutput(this, 'PublicInstanceIP', {
-      value: publicInstance.instancePublicIp,
+      value: publicInstance.attrPublicIp,
       description: 'Public Instance Public IP',
     });
 
