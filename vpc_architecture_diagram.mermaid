@@ -1,0 +1,72 @@
+graph TB
+    subgraph Internet["🌐 Internet"]
+        Users[👥 Users]
+    end
+    
+    subgraph AWS["☁️ AWS Cloud"]
+        IGW[🌐 Internet Gateway]
+        
+        subgraph VPC["🏠 VPC (10.0.0.0/24)"]
+            subgraph PublicSubnet["🌍 Public Subnet (10.0.0.0/26)"]
+                PublicEC2[🖥️ Public EC2<br/>t2.micro<br/>Amazon Linux 2<br/>Web Server]
+                NAT[🔄 NAT Gateway<br/>+ Elastic IP]
+            end
+            
+            subgraph PrivateSubnet["🔒 Private Subnet (10.0.0.64/26)"]
+                PrivateEC2[🖥️ Private EC2<br/>t2.micro<br/>Amazon Linux 2<br/>App Server]
+            end
+            
+            subgraph RoutingLayer["📋 Route Tables"]
+                PublicRT[📤 Public Route Table<br/>0.0.0.0/0 → IGW]
+                PrivateRT[📥 Private Route Table<br/>0.0.0.0/0 → NAT]
+            end
+            
+            subgraph SecurityLayer["🛡️ Security Groups"]
+                PublicSG[🔓 Public SG<br/>SSH: 22<br/>HTTP: 80<br/>HTTPS: 443]
+                PrivateSG[🔐 Private SG<br/>SSH from Public<br/>All from VPC]
+            end
+            
+            subgraph NACLLayer["🚧 Network ACLs"]
+                PublicNACL[🚦 Public NACL<br/>Allow All Traffic]
+                PrivateNACL[🚦 Private NACL<br/>VPC + Ephemeral Ports]
+            end
+        end
+    end
+    
+    %% Internet connections
+    Users -.->|HTTP/HTTPS<br/>SSH| IGW
+    
+    %% IGW connections
+    IGW <-.->|Bidirectional| PublicSubnet
+    
+    %% Internal VPC connections
+    PublicEC2 -.->|SSH Access| PrivateEC2
+    PrivateEC2 -.->|Outbound Internet<br/>via NAT| NAT
+    NAT -.->|Internet Access| IGW
+    
+    %% Route table associations
+    PublicRT -.->|Associated| PublicSubnet
+    PrivateRT -.->|Associated| PrivateSubnet
+    
+    %% Security group associations
+    PublicSG -.->|Applied to| PublicEC2
+    PrivateSG -.->|Applied to| PrivateEC2
+    
+    %% NACL associations
+    PublicNACL -.->|Applied to| PublicSubnet
+    PrivateNACL -.->|Applied to| PrivateSubnet
+    
+    %% Styling
+    classDef publicSubnet fill:#e1f5fe,stroke:#0277bd,stroke-width:2px
+    classDef privateSubnet fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    classDef ec2 fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef networking fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
+    classDef security fill:#ffebee,stroke:#d32f2f,stroke-width:2px
+    classDef internet fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    
+    class PublicSubnet,PublicRT,PublicNACL publicSubnet
+    class PrivateSubnet,PrivateRT,PrivateNACL privateSubnet
+    class PublicEC2,PrivateEC2 ec2
+    class IGW,NAT networking
+    class PublicSG,PrivateSG security
+    class Internet,Users internet
